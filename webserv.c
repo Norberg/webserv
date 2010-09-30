@@ -1,5 +1,8 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
+#include <limits.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -10,10 +13,33 @@ void * th_response(void *arg)
 {
 	int new_socket = (int)arg;
 	char *message="HTTP/1.0 501 Not Implemented";
+	char docroot[512]="/var/www/";
+	char *temp;
+	char *uri;
 	char buffer[buffsize];
+	char buf[PATH_MAX];
 	recv(new_socket,buffer,buffsize,0);
 	printf("Message recived: %s\n", buffer);
-	send(new_socket,message,strlen(message),0);
+	if (strncmp(buffer, "GET",3) == 0)
+	{
+		printf("Get request\n");
+		message = "<html><b>Works</b> </html>";
+		temp = buffer; // TODO do we really need this
+		strsep(&temp, " "); // GET
+		uri = strsep(&temp, " ");
+		strcat(docroot, uri);
+		char *res = realpath(docroot, buf);
+		printf("REALPATH: %s\n", buf);
+		int fd = open("Makefile", "r");
+		char finput[1024];
+		printf("File %d open %d \n",&fd, read(fd, finput, 1024));
+		printf("Message: %s\n", finput);
+		send(new_socket,message,strlen(message),0);
+	}
+	else
+	{
+		send(new_socket,message,strlen(message),0);
+	}	
 	printf("Message sent successfully by: %x", (unsigned int)pthread_self());
 	close(new_socket);
 	sleep(10);
