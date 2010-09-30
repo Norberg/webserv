@@ -3,6 +3,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <limits.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -12,37 +13,45 @@
 void * th_response(void *arg)
 {
 	int new_socket = (int)arg;
-	char *message="HTTP/1.0 501 Not Implemented";
+	char *message="HTTP/1.0 501 Not Implemented \r\n";
 	char docroot[512]="/var/www/";
 	char *temp;
 	char *uri;
+	char *res;
 	char buffer[buffsize];
-	char buf[PATH_MAX];
+	char finput[1024];
+	int fd = 0;
+
 	recv(new_socket,buffer,buffsize,0);
-	printf("Message recived: %s\n", buffer);
+	printf("\nMessage recived: %s\n", buffer);
 	if (strncmp(buffer, "GET",3) == 0)
 	{
-		printf("Get request\n");
-		message = "<html><b>Works</b> </html>";
 		temp = buffer; // TODO do we really need this
-		strsep(&temp, " "); // GET
+		uri = strsep(&temp, " "); // GET
 		uri = strsep(&temp, " ");
 		strcat(docroot, uri);
-		char *res = realpath(docroot, buf);
-		printf("REALPATH: %s\n", buf);
-		int fd = open("Makefile", "r");
-		char finput[1024];
-		printf("File %d open %d \n",&fd, read(fd, finput, 1024));
-		printf("Message: %s\n", finput);
-		send(new_socket,message,strlen(message),0);
+		res = realpath(docroot, NULL);
+		printf("REALPATH: %s\n",res);
+		if(res == NULL)
+		{
+			strcpy(finput,"HTTP/1.0 404 Not Found \r\n");
+		}
+		else
+		{
+			fd = open(res, O_RDONLY);
+			if(read(fd, finput, 1024) == -1)
+				strcpy(finput,"HTTP/1.0 501 Internal Server Error\r\n");
+		}
+		printf("Sending: %s\n", finput);
+		send(new_socket,finput,strlen(finput),0);
+		free(res);
+		close(fd);
 	}
 	else
 	{
 		send(new_socket,message,strlen(message),0);
 	}	
-	printf("Message sent successfully by: %x", (unsigned int)pthread_self());
 	close(new_socket);
-	sleep(10);
 	return ((void *)0);
 }
 
