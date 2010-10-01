@@ -8,7 +8,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-#define buffsize 512
+#define BUFF_SIZE 4096
 
 void * th_response(void *arg)
 {
@@ -18,39 +18,50 @@ void * th_response(void *arg)
 	char *temp;
 	char *uri;
 	char *res;
-	char buffer[buffsize];
-	char finput[1024];
+	char buffer[BUFF_SIZE];
 	int fd = 0;
+	int size;
 
-	recv(new_socket,buffer,buffsize,0);
+	recv(new_socket,buffer,BUFF_SIZE,0);
 	printf("\nMessage recived: %s\n", buffer);
 	if (strncmp(buffer, "GET",3) == 0)
 	{
 		temp = buffer; // TODO do we really need this
-		uri = strsep(&temp, " "); // GET
-		uri = strsep(&temp, " ");
+		uri = strsep(&temp, " \r\n"); // GET
+		uri = strsep(&temp, " \r\n");
 		strcat(docroot, uri);
 		res = realpath(docroot, NULL);
-		printf("REALPATH: %s\n",res);
+		printf("Docroot: %s REALPATH: %s\n",docroot, res);
 		if(res == NULL)
 		{
-			strcpy(finput,"HTTP/1.0 404 Not Found \r\n");
+			strcpy(buffer,"HTTP/1.0 404 Not Found \r\n");
+			printf("Sending: %s\n", buffer);
+			send(new_socket,buffer, strlen(buffer),0);
+			free(res);
+			close(new_socket);
+			return ((void *)0);
 		}
-		else
+	
+		fd = open(res, O_RDONLY);
+		size = read(fd, buffer, BUFF_SIZE);
+		while (size > 0)
 		{
-			fd = open(res, O_RDONLY);
-			if(read(fd, finput, 1024) == -1)
-				strcpy(finput,"HTTP/1.0 501 Internal Server Error\r\n");
+			if(size == -1)
+			{
+				strcpy(buffer,"HTTP/1.0 501 Internal Server Error\r\n");
+				send(new_socket,buffer,strlen(buffer),0);
+				break;
+			}
+			send(new_socket,buffer,size,0);
+			size = read(fd, buffer, BUFF_SIZE);
 		}
-		printf("Sending: %s\n", finput);
-		send(new_socket,finput,strlen(finput),0);
 		free(res);
 		close(fd);
 	}
 	else
 	{
 		send(new_socket,message,strlen(message),0);
-	}	
+	}
 	close(new_socket);
 	return ((void *)0);
 }
