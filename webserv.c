@@ -58,6 +58,27 @@ int response(int new_socket)
 		free(res);
 		close(fd);
 	}
+	else if (strncmp(buffer, "HEAD",4) == 0)
+	{
+		temp = buffer; // TODO do we really need this
+		uri = strsep(&temp, " \r\n"); // GET
+		uri = strsep(&temp, " \r\n");
+		res = realpath(uri, NULL);
+		printf("uri: %s REALPATH: %s\n",uri, res);
+		if(res == NULL)
+		{
+			strcpy(buffer,"HTTP/1.0 404 Not Found \r\n");
+			printf("Sending: %s\n", buffer);
+			send(new_socket,buffer, strlen(buffer),0);
+			free(res);
+			close(new_socket);
+			return (0);
+		}
+		message = "HTTP/1.0 200 OK \r\n";
+		send(new_socket,message,strlen(message),0);
+		free(res);
+		close(fd);
+	}
 	else
 	{
 		send(new_socket,message,strlen(message),0);
@@ -65,6 +86,7 @@ int response(int new_socket)
 	close(new_socket);
 	return (0);
 }
+
 
 void * worker_thread(void *arg)
 {
