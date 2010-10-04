@@ -3,17 +3,15 @@
 #include<fcntl.h>
 #include<time.h>
 
-void write_log(char *file_name, char *ip, char *ident, char *auth, char *request, int status, int bytes) 
+void write_log(FILE *file, char *ip, char *ident, char *auth, char *request, int status, int bytes) 
 {
-	FILE *f = fopen(file_name, "a+");
 	time_t result;
 	result = time(NULL);
 	struct tm* brokentime = localtime(&result);
 	char *now = asctime(brokentime);
 	now[24] = '\0';
-	fprintf(f, "%s %s %s [%s] %s %d %d \n", ip, ident, auth, now, request, status, bytes);
-	
-	fclose(f);
+	fprintf(file, "%s %s %s [%s] %s %d %d \n", ip, ident, auth, now, request, status, bytes);
+	fflush(file);
 }
 char * read_mime(char *extension)
 {
@@ -52,6 +50,7 @@ void read_conf(int *port, char *docroot)
 	fclose(f);
 	free(line);
 }
+/*
 int main() 
 {
 	char docroot[256];
@@ -62,3 +61,4 @@ int main()
 	//printf("%s %d \n", docroot, port);
 	write_log("test.log", "192.0.0.2", "-", "-", "Testing testing", 404, 0);
 }
+*/

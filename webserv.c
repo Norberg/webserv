@@ -8,10 +8,12 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include "tools.c"
 
 #define BUFF_SIZE 4096
-#define DOCROOT "/var/www"
 #define NR_THREADS 5
+
+FILE* logfile;
 
 int response(int new_socket)
 {
@@ -22,6 +24,7 @@ int response(int new_socket)
 	char buffer[BUFF_SIZE];
 	int fd = 0;
 	int size;
+	int bytes = 0;
 
 	recv(new_socket,buffer,BUFF_SIZE,0);
 	printf("\nMessage recived: %s\n", buffer);
@@ -52,9 +55,11 @@ int response(int new_socket)
 				send(new_socket,buffer,strlen(buffer),0);
 				break;
 			}
+			bytes += size;
 			send(new_socket,buffer,size,0);
 			size = read(fd, buffer, BUFF_SIZE);
 		}
+		write_log(logfile, "127.0.0.1", "-", "-", "GET", 200, bytes);
 		free(res);
 		close(fd);
 	}
@@ -120,10 +125,14 @@ int main()
 	int new_socket;
 	int last_thread = 0;
 	int i;
+	int port;
+	char docroot[256];
+	logfile = fopen("webserv.log","a+");
+	read_conf(&port, docroot);
 	
 	/* tries to chroot the process and then leave privileged mode */
-	chdir(DOCROOT);
-	if (chroot(DOCROOT) == -1)
+	chdir(docroot);
+	if (chroot(docroot) == -1)
 	{
 		puts("Server started without chroot permissions");
 		puts("exiting");
@@ -146,10 +155,10 @@ int main()
 	/* type of socket created */
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = INADDR_ANY;
-	address.sin_port = htons(8080);
+	address.sin_port = htons(port);
 	bind(master_socket,(struct sockaddr *)&address,sizeof(address));
 
-	/* maximum pending connections for the master socket */
+	/* maximum pending connections for master socket */
 	listen(master_socket,5);
 	
 
