@@ -1,0 +1,4 @@
+#Document root folder
+Docroot /var/www/
+#Default listen port
+Listen 8080
