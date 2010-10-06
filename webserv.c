@@ -21,7 +21,9 @@ int response(int new_socket)
 	char *temp;
 	char *uri;
 	char *res;
+	char *httpv;
 	char buffer[BUFF_SIZE];
+	char test[BUFF_SIZE+100];
 	int fd = 0;
 	int size;
 	int bytes = 0;
@@ -33,6 +35,7 @@ int response(int new_socket)
 		temp = buffer; // TODO do we really need this
 		uri = strsep(&temp, " \r\n"); // GET
 		uri = strsep(&temp, " \r\n");
+		httpv = strsep(&temp, " \r\n"); // HTTP version
 		res = realpath(uri, NULL);
 		printf("uri: %s REALPATH: %s\n",uri, res);
 		if(res == NULL)
@@ -44,10 +47,18 @@ int response(int new_socket)
 			close(new_socket);
 			return (0);
 		}
-	
+		else if (httpv[0] != '\0') //Full request
+		{
+			strcpy(test,"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n");
+			//send(new_socket,message,strlen(message),0);
+			//message = "Content-Type: text/plain; \r\n \r\n";
+			//send(new_socket,message,strlen(message),0);
+		}	
 		fd = open(res, O_RDONLY);
 		size = read(fd, buffer, BUFF_SIZE);
-		while (size > 0)
+		memcpy(test+strlen(test), buffer, BUFF_SIZE);
+		send(new_socket,test,size,0);
+		while (size > 0 && 1==0)
 		{
 			if(size == -1)
 			{
@@ -59,7 +70,7 @@ int response(int new_socket)
 			send(new_socket,buffer,size,0);
 			size = read(fd, buffer, BUFF_SIZE);
 		}
-		write_log(logfile, "127.0.0.1", "-", "-", "GET", 200, bytes);
+		write_log("webserv.log", "127.0.0.1", "-", "-", "GET", 200, bytes);
 		free(res);
 		close(fd);
 	}
@@ -80,6 +91,8 @@ int response(int new_socket)
 			return (0);
 		}
 		message = "HTTP/1.0 200 OK \r\n";
+		send(new_socket,message,strlen(message),0);
+		message = "Content-Type: text/plain \r\n \r\n";
 		send(new_socket,message,strlen(message),0);
 		free(res);
 		close(fd);
@@ -127,9 +140,12 @@ int main()
 	int i;
 	int port;
 	char docroot[256];
-	logfile = fopen("webserv.log","a+");
+	char extension[32];
+	char type[32];
 	read_conf(&port, docroot);
-	
+	write_log("webserv.log", NULL, NULL, NULL, NULL, 0, 0);
+	read_mime(extension, type);
+		
 	/* tries to chroot the process and then leave privileged mode */
 	chdir(docroot);
 	if (chroot(docroot) == -1)
