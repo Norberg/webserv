@@ -18,9 +18,9 @@ void write_log(char *file_name, char *ip, char *ident, char *auth, char *request
 	time_t result;
 	result = time(NULL);
 	struct tm* brokentime = localtime(&result);
-	char *now = asctime(brokentime);
-	now[24] = '\0';
-	fprintf(file, "%s %s %s [%s] %s %d %d \n", ip, ident, auth, now, request, status, bytes);
+	char now[32]; 
+	strftime(now, 32, "%d/%b/%Y:%T %z", brokentime);
+	fprintf(file, "%s %s %s [%s] \"%s\" %d %d \n", ip, ident, auth, now, request, status, bytes);
 	fflush(file);	
 }
 char * read_mime(char *extension, char *target)
@@ -107,6 +107,6 @@ void read_conf(int *port, char *docroot)
 	//read_conf(&port, docroot);
 
 	//printf("%s %d \n", docroot, port);
-	//write_log("test.log", "192.0.0.2", "-", "-", "Testing testing", 404, 0);
+//	write_log("test.log", "192.0.0.2", "-", "-", "Testing testing", 404, 0);
 //}
 
