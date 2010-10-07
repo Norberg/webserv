@@ -1,5 +1,6 @@
 #include<stdio.h>
 #include<stdlib.h>
+#include<string.h>
 #include<fcntl.h>
 #include<time.h>
 
@@ -23,6 +24,18 @@ void write_log(char *file_name, char *ip, char *ident, char *auth, char *request
 	fprintf(file, "%s %s %s [%s] \"%s\" %d %d \n", ip, ident, auth, now, request, status, bytes);
 	fflush(file);	
 }
+char * get_extension(char *path, char *extension)
+{
+	int len = strlen(path);
+	for (len = strlen(path);len > 0; len--)
+	{
+		if(path[len] == '.')
+			return path+len+1;
+		else if (path[len] == '/')
+			return NULL;	
+	}
+}
+	
 char * read_mime(char *extension, char *target)
 {
 	static FILE *f = NULL;
@@ -93,14 +106,15 @@ void read_conf(int *port, char *docroot)
 	fclose(f);
 	free(line);
 }
-
-//int main() 
-//{
-//	char extension[25] = "pdf";
-//	char target[256];
-//	char *vad;
-//	vad = read_mime(extension, target);
-//	printf("%s \t %s \n", vad, extension);
+/*
+int main() 
+{
+	char extension[25] = "pdf";
+	char target[256];
+	char *vad;
+	vad = read_mime(extension, target);
+	printf("%s \t %s \n", vad, extension);
+	return 0;
 	//char docroot[256];
 	//int port;
 
@@ -108,5 +122,5 @@ void read_conf(int *port, char *docroot)
 
 	//printf("%s %d \n", docroot, port);
 //	write_log("test.log", "192.0.0.2", "-", "-", "Testing testing", 404, 0);
-//}
-
+}
+*/
