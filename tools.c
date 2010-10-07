@@ -3,6 +3,7 @@
 #include<string.h>
 #include<fcntl.h>
 #include<time.h>
+#include<syslog.h>
 
 void write_log(char *file_name, char *ip, char *ident, char *auth, char *request, int status, int bytes) 
 {
@@ -36,6 +37,14 @@ char * get_extension(char *path, char *extension)
 	}
 }
 	
+void write_syslog() 
+{
+	time_t t = time(0);
+	openlog("webserv: ", LOG_PID | LOG_CONS, LOG_USER);
+	syslog(LOG_ERR, "started at %s", ctime(&t));
+	closelog();
+}
+
 char * read_mime(char *extension, char *target)
 {
 	static FILE *f = NULL;
@@ -49,6 +58,9 @@ char * read_mime(char *extension, char *target)
 	char *line = NULL;
 	size_t len = 0;
 	ssize_t read;
+
+	//Make sure the file-pointer is at the beginning
+	rewind(f);
 
 	while ((read = getline(&line, &len, f)) != -1) 
 	{
@@ -106,15 +118,17 @@ void read_conf(int *port, char *docroot)
 	fclose(f);
 	free(line);
 }
-/*
-int main() 
-{
-	char extension[25] = "pdf";
+//int main() 
+//{
+
+//	write_syslog();
+/*	char extension[32] = "php";
 	char target[256];
 	char *vad;
+	vad = extension;
 	vad = read_mime(extension, target);
-	printf("%s \t %s \n", vad, extension);
-	return 0;
+	puts(vad);
+	printf("%s %s \n", vad, extension); */
 	//char docroot[256];
 	//int port;
 
@@ -122,5 +136,4 @@ int main()
 
 	//printf("%s %d \n", docroot, port);
 //	write_log("test.log", "192.0.0.2", "-", "-", "Testing testing", 404, 0);
-}
-*/
+//}

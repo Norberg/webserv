@@ -23,6 +23,7 @@ int response(int new_socket)
 	char *res;
 	char *httpv;
 	char buffer[BUFF_SIZE];
+	char extension[32];
 	int fd = 0;
 	int size;
 	int bytes = 0;
@@ -48,6 +49,10 @@ int response(int new_socket)
 		}
 		else if (httpv[0] != '\0') //Full request
 		{
+			temp = get_extension(res, extension);
+			puts(temp);	
+			temp = read_mime(temp, extension);
+			puts(temp);			
 			strcpy(buffer,"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n");
 			send(new_socket,buffer,strlen(buffer),0);
 		}	
