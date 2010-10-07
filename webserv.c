@@ -15,6 +15,18 @@
 
 FILE* logfile;
 
+void create_header(char *path, char *buffer)
+{
+	char temp[32];
+	char *content_type;
+	char *file_extension;
+	file_extension = get_extension(path, temp);
+	content_type = read_mime(file_extension, temp);
+	strcpy(buffer,"HTTP/1.0 200 OK\r\nContent-Type: ");
+	strcat(buffer, content_type);
+	strcat(buffer, "\r\n\r\n");
+}
+
 int response(int new_socket)
 {
 	char *message="HTTP/1.0 501 Not Implemented \r\n";
@@ -29,7 +41,6 @@ int response(int new_socket)
 	int bytes = 0;
 
 	recv(new_socket,buffer,BUFF_SIZE,0);
-	printf("\nMessage recived: %s\n", buffer);
 	if (strncmp(buffer, "GET",3) == 0)
 	{
 		temp = buffer; // TODO do we really need this
@@ -41,19 +52,15 @@ int response(int new_socket)
 		if(res == NULL)
 		{
 			strcpy(buffer,"HTTP/1.0 404 Not Found \r\n");
-			printf("Sending: %s\n", buffer);
 			send(new_socket,buffer, strlen(buffer),0);
+			write_log("webserv.log", "127.0.0.1", "-", "-", "GET", 404, 0);
 			free(res);
 			close(new_socket);
 			return (0);
 		}
 		else if (httpv[0] != '\0') //Full request
 		{
-			temp = get_extension(res, extension);
-			puts(temp);	
-			temp = read_mime(temp, extension);
-			puts(temp);			
-			strcpy(buffer,"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n");
+			create_header(res,buffer);
 			send(new_socket,buffer,strlen(buffer),0);
 		}	
 		fd = open(res, O_RDONLY);
@@ -84,16 +91,13 @@ int response(int new_socket)
 		if(res == NULL)
 		{
 			strcpy(buffer,"HTTP/1.0 404 Not Found \r\n");
-			printf("Sending: %s\n", buffer);
 			send(new_socket,buffer, strlen(buffer),0);
 			free(res);
 			close(new_socket);
 			return (0);
 		}
-		message = "HTTP/1.0 200 OK \r\n";
-		send(new_socket,message,strlen(message),0);
-		message = "Content-Type: text/plain \r\n \r\n";
-		send(new_socket,message,strlen(message),0);
+		create_header(res,buffer);
+		send(new_socket,buffer,strlen(buffer),0);
 		free(res);
 		close(fd);
 	}
@@ -113,7 +117,6 @@ void * worker_thread(void *arg)
 	while(1)
 	{
 		read(pipe[0],(char *)&new_socket,sizeof(int));	
-		printf("response to socket: %d \n", new_socket);
 		response(new_socket);
 	}
 	return ((void *)0);
