@@ -29,7 +29,6 @@ void create_header(char *path, char *buffer)
 
 int response(int new_socket)
 {
-	char *message="HTTP/1.0 501 Not Implemented \r\n";
 	char *temp;
 	char *uri;
 	char *res;
@@ -54,16 +53,20 @@ int response(int new_socket)
 			strcpy(buffer,"HTTP/1.0 404 Not Found \r\n");
 			send(new_socket,buffer, strlen(buffer),0);
 			write_log("webserv.log", "127.0.0.1", "-", "-", "GET", 404, 0);
-			free(res);
-			close(new_socket);
-			return (0);
+			goto cleanup;
 		}
-		else if (httpv[0] != '\0') //Full request
+		fd = open(res, O_RDONLY);
+		if (fd == -1)
+		{
+			strcpy(buffer,"HTTP/1.0 403 Forbidden\r\n");
+			send(new_socket,buffer,strlen(buffer),0);
+			goto cleanup;
+		}
+		if (httpv[0] != '\0') //Full request
 		{
 			create_header(res,buffer);
 			send(new_socket,buffer,strlen(buffer),0);
 		}	
-		fd = open(res, O_RDONLY);
 		size = read(fd, buffer, BUFF_SIZE);
 		while (size > 0)
 		{
@@ -78,8 +81,10 @@ int response(int new_socket)
 			size = read(fd, buffer, BUFF_SIZE);
 		}
 		write_log("webserv.log", "127.0.0.1", "-", "-", "GET", 200, bytes);
+		cleanup:
 		free(res);
 		close(fd);
+		close(new_socket);
 	}
 	else if (strncmp(buffer, "HEAD",4) == 0)
 	{
@@ -103,7 +108,8 @@ int response(int new_socket)
 	}
 	else
 	{
-		send(new_socket,message,strlen(message),0);
+		strcpy(buffer,"HTTP/1.0 501 Not Implemented \r\n");
+		send(new_socket,buffer,strlen(buffer),0);
 	}
 	close(new_socket);
 	return (0);
