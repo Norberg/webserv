@@ -4,8 +4,11 @@
 #include<fcntl.h>
 #include<time.h>
 #include<syslog.h>
+#include<unistd.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
 
-void write_log(char *file_name, char *ip, char *ident, char *auth, char *request, int status, int bytes) 
+void write_log(char *file_name, char *ip, char *ident, char *auth, char *request_type, char *request_file, int status, int bytes) 
 {
 	static FILE *file = NULL;
 	if(file == NULL) 
@@ -22,7 +25,7 @@ void write_log(char *file_name, char *ip, char *ident, char *auth, char *request
 	struct tm* brokentime = localtime(&result);
 	char now[32]; 
 	strftime(now, 32, "%d/%b/%Y:%T %z", brokentime);
-	fprintf(file, "%s %s %s [%s] \"%s\" %d %d \n", ip, ident, auth, now, request, status, bytes);
+	fprintf(file, "%s %s %s [%s] \"%s %s\" %d %d \n", ip, ident, auth, now, request_type, request_file, status, bytes);
 	fflush(file);	
 }
 char * get_extension(char *path, char *extension)
@@ -37,11 +40,15 @@ char * get_extension(char *path, char *extension)
 	}
 }
 	
-void write_syslog() 
+void write_syslog(char *msg) 
 {
+	if(strlen(msg) > 64) 
+	{
+		return;
+	}
 	time_t t = time(0);
 	openlog("webserv: ", LOG_PID | LOG_CONS, LOG_USER);
-	syslog(LOG_ERR, "started at %s", ctime(&t));
+	syslog(LOG_ERR, "%s", msg);
 	closelog();
 }
 
@@ -118,10 +125,33 @@ void read_conf(int *port, char *docroot)
 	fclose(f);
 	free(line);
 }
-//int main() 
-//{
+void get_opt(int argc, char **argv, int *port, char *log_file, int *daemon) 
+{
+	*daemon = 0;
+	int c;
+	while ((c = getopt (argc, argv, "p:dl:")) != -1) 
+	switch (c)
+	{
+        	case 'p':
+        		*port = atoi(optarg);
+       			break;
+       		case 'd':
+	     	 	*daemon = 1;
+             		break;
+           	case 'l':
+			strcpy(log_file, optarg);
+             		break;
+	}
 
-//	write_syslog();
+}
+//int main(int argc, char **argv) 
+//{
+/*	int port;
+	int daemon;
+	char log_file[256];
+	get_opt(argc, argv, &port, log_file, &daemon);
+	printf("%d \t %s \t %d \n", port, log_file, daemon); */
+	//write_syslog("It's a syslog yo");
 /*	char extension[32] = "php";
 	char target[256];
 	char *vad;
