@@ -52,7 +52,7 @@ int response(int new_socket)
 		{
 			strcpy(buffer,"HTTP/1.0 404 Not Found \r\n");
 			send(new_socket,buffer, strlen(buffer),0);
-			write_log("webserv.log", "127.0.0.1", "-", "-", "GET", 404, 0);
+			write_log("webserv.log", "127.0.0.1", "-", "-", "GET ", uri, 404, 0);
 			goto cleanup;
 		}
 		fd = open(res, O_RDONLY);
@@ -80,7 +80,7 @@ int response(int new_socket)
 			send(new_socket,buffer,size,0);
 			size = read(fd, buffer, BUFF_SIZE);
 		}
-		write_log("webserv.log", "127.0.0.1", "-", "-", "GET", 200, bytes);
+		write_log("webserv.log", "127.0.0.1", "-", "-", "GET ", uri, 200, bytes);
 		cleanup:
 		free(res);
 		close(fd);
@@ -152,10 +152,10 @@ int main()
 	char extension[32];
 	char type[32];
 	read_conf(&port, docroot);
-	write_log("webserv.log", NULL, NULL, NULL, NULL, 0, 0);
+	write_log("webserv.log", NULL,NULL, NULL, NULL, NULL, 0, 0);
 	read_mime(extension, type);
 		
-	/* tries to chroot the process and then leave privileged mode */
+	/* tries to chroot the process and */
 	chdir(docroot);
 	if (chroot(docroot) == -1)
 	{
@@ -163,18 +163,10 @@ int main()
 		puts("exiting");
 		return 0;
 	}
-	setuid(1000);
 
-	/* Spawn worker threads */
-	for (i = 0; i < NR_THREADS; i++)
-	{
-		pipe(pipes[i]);
-		pthread_create(&thread[i], NULL, worker_thread, pipes[i]);
-	}	
 
+	/* create and set master socket to allow multiple connections */
 	master_socket=socket(AF_INET,SOCK_STREAM,0);
-
-	/* set master socket to allow multiple connections */
 	setsockopt(master_socket,SOL_SOCKET,SO_REUSEADDR,(char *)&opt,sizeof(opt));
 
 	/* type of socket created */
@@ -182,10 +174,19 @@ int main()
 	address.sin_addr.s_addr = INADDR_ANY;
 	address.sin_port = htons(port);
 	bind(master_socket,(struct sockaddr *)&address,sizeof(address));
+	
+	/*leave privileged mode */
+	setuid(1000);
 
 	/* maximum pending connections for master socket */
 	listen(master_socket,5);
 	
+	/* Spawn worker threads */
+	for (i = 0; i < NR_THREADS; i++)
+	{
+		pipe(pipes[i]);
+		pthread_create(&thread[i], NULL, worker_thread, pipes[i]);
+	}	
 
 	addrlen=sizeof(address);
 	while (1)
