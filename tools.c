@@ -59,6 +59,11 @@ char * read_mime(char *extension, char *target)
 	{
 		f = fopen("mime.types", "r");
 	}
+	else if (extension == NULL)
+	{
+		target = "application/octet-stream";
+		return	target; 
+	}
 
 	char content_type[256];
 	char ending[7][32];
