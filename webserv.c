@@ -52,7 +52,7 @@ int response(int new_socket)
 		{
 			strcpy(buffer,"HTTP/1.0 404 Not Found \r\n");
 			send(new_socket,buffer, strlen(buffer),0);
-			write_log("webserv.log", "127.0.0.1", "-", "-", "GET ", uri, 404, 0);
+			write_log("webserv.log", "127.0.0.1", "-", "-", "GET ", res, 404, 0);
 			goto cleanup;
 		}
 		fd = open(res, O_RDONLY);
@@ -80,11 +80,7 @@ int response(int new_socket)
 			send(new_socket,buffer,size,0);
 			size = read(fd, buffer, BUFF_SIZE);
 		}
-		write_log("webserv.log", "127.0.0.1", "-", "-", "GET ", uri, 200, bytes);
-		cleanup:
-		free(res);
-		close(fd);
-		close(new_socket);
+		write_log("webserv.log", "127.0.0.1", "-", "-", "GET ", res, 200, bytes);
 	}
 	else if (strncmp(buffer, "HEAD",4) == 0)
 	{
@@ -103,14 +99,15 @@ int response(int new_socket)
 		}
 		create_header(res,buffer);
 		send(new_socket,buffer,strlen(buffer),0);
-		free(res);
-		close(fd);
 	}
 	else
 	{
 		strcpy(buffer,"HTTP/1.0 501 Not Implemented \r\n");
 		send(new_socket,buffer,strlen(buffer),0);
 	}
+	cleanup:
+	free(res);
+	close(fd);
 	close(new_socket);
 	return (0);
 }
@@ -136,7 +133,7 @@ int next_thread(int *last_thread)
 	return *last_thread;
 }
 
-int main()
+int main(int argc, char **argv)
 {
 	pthread_t thread[NR_THREADS];
 	int pipes[NR_THREADS][2];
@@ -148,11 +145,15 @@ int main()
 	int last_thread = 0;
 	int i;
 	int port;
+	int daemon;
 	char docroot[256];
 	char extension[32];
 	char type[32];
+	char logfile[32] = "webserv.log";
+	
 	read_conf(&port, docroot);
-	write_log("webserv.log", NULL,NULL, NULL, NULL, NULL, 0, 0);
+	get_opt(argc, argv, &port, logfile, &daemon); 
+	write_log(logfile,NULL,NULL, NULL, NULL, NULL, 0, 0);
 	read_mime(extension, type);
 		
 	/* tries to chroot the process and */
