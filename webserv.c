@@ -29,14 +29,14 @@ void create_header(char *path, char *buffer)
 
 int response(int new_socket)
 {
-	char *temp;
-	char *uri;
-	char *res;
-	char *httpv;
+	char *temp = NULL;
+	char *uri = NULL;
+	char *res = NULL;
+	char *httpv = NULL;
 	char buffer[BUFF_SIZE];
 	char extension[32];
 	int fd = 0;
-	int size;
+	int size = 0;
 	int bytes = 0;
 
 	recv(new_socket,buffer,BUFF_SIZE,0);
@@ -52,7 +52,7 @@ int response(int new_socket)
 		{
 			strcpy(buffer,"HTTP/1.0 404 Not Found \r\n");
 			send(new_socket,buffer, strlen(buffer),0);
-			write_log("webserv.log", "127.0.0.1", "-", "-", "GET ", res, 404, 0);
+			write_log(NULL, "127.0.0.1", "-", "-", "GET ", uri, 404, 0);
 			goto cleanup;
 		}
 		fd = open(res, O_RDONLY);
@@ -80,7 +80,7 @@ int response(int new_socket)
 			send(new_socket,buffer,size,0);
 			size = read(fd, buffer, BUFF_SIZE);
 		}
-		write_log("webserv.log", "127.0.0.1", "-", "-", "GET ", res, 200, bytes);
+		write_log(NULL, "127.0.0.1", "-", "-", "GET ", res, 200, bytes);
 	}
 	else if (strncmp(buffer, "HEAD",4) == 0)
 	{
@@ -93,9 +93,7 @@ int response(int new_socket)
 		{
 			strcpy(buffer,"HTTP/1.0 404 Not Found \r\n");
 			send(new_socket,buffer, strlen(buffer),0);
-			free(res);
-			close(new_socket);
-			return (0);
+			goto cleanup;
 		}
 		create_header(res,buffer);
 		send(new_socket,buffer,strlen(buffer),0);
