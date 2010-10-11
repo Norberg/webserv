@@ -13,6 +13,12 @@
 #define BUFF_SIZE 4096
 #define NR_THREADS 5
 
+struct connection
+{
+	int socket;
+	int fd;	
+};
+
 void create_header(char *path, char *buffer)
 {
 	char temp[32];
@@ -25,7 +31,32 @@ void create_header(char *path, char *buffer)
 	strcat(buffer, "\r\n\r\n");
 }
 
-int response(int new_socket)
+/* Returns 0 when finnished and 1 otherwine*/
+int send_file(int socket, int fd)
+{
+	char buffer[BUFF_SIZE];
+	int size = read(fd, buffer, BUFF_SIZE);
+	if (size > 0)
+	{
+		send(socket,buffer,size,0);
+	}
+	else if (size == 0)
+	{
+		puts("sent the complete file now");
+		write_log(NULL, "127.0.0.1", "-", "-", "GET ", "filename", 200, 512);
+		close(fd);
+		close(socket);
+		return 0;
+	}
+	else if(size == -1)
+	{
+		strcpy(buffer,"HTTP/1.0 501 Internal Server Error\r\n");
+		send(socket,buffer,strlen(buffer),0);
+	}
+	return 1;
+}
+
+int response(int new_socket, struct connection *conn)
 {
 	char *temp = NULL;
 	char *uri = NULL;
@@ -63,11 +94,12 @@ int response(int new_socket)
 			send(new_socket,buffer, strlen(buffer),0);
 			goto cleanup;
 		}
-		fd = open(res, O_RDONLY);
+		fd = open(res, O_RDONLY|O_NONBLOCK);
 		if (fd == -1)
 		{
 			strcpy(buffer,"HTTP/1.0 403 Forbidden\r\n");
 			send(new_socket,buffer,strlen(buffer),0);
+			close(new_socket);
 			goto cleanup;
 		}
 		if (httpv[0] != '\0') //Full request
@@ -96,6 +128,7 @@ int response(int new_socket)
 			size = read(fd, buffer, BUFF_SIZE);
 		}
 		write_log(NULL, new_socket, "-", "-", "GET ", res, 200, bytes);
+		//send_file(new_socket, fd);
 	}
 	else if (strncmp(buffer, "HEAD",4) == 0)
 	{
@@ -117,12 +150,15 @@ int response(int new_socket)
 	{
 		strcpy(buffer,"HTTP/1.0 501 Not Implemented \r\n");
 		send(new_socket,buffer,strlen(buffer),0);
+		close(new_socket);
 	}
 	cleanup:
 	free(res);
-	close(fd);
-	close(new_socket);
-	return (0);
+	/*close(fd);
+	close(new_socket);*/
+	conn->socket = new_socket;
+	conn->fd = fd; 
+	return 0;
 }
 
 
@@ -130,10 +166,16 @@ void * worker_thread(void *arg)
 {
 	int *pipe  = (int *)arg;
 	int new_socket;
+	int fsd[32]; /* File and socket descriptors */
+	struct connection conn;
+	fd_set ready;
+	struct timeval timeout;
+	/*TODO: use select on fsd and figure out how to read the pipe at the same time*/	
 	while(1)
 	{
 		read(pipe[0],(char *)&new_socket,sizeof(int));	
-		response(new_socket);
+		response(new_socket, &conn);
+		send_file(conn.socket, conn.fd);
 	}
 	return ((void *)0);
 }
