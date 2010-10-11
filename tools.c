@@ -49,7 +49,7 @@ char * get_extension(char *path, char *extension)
 			return NULL;	
 	}
 }
-	
+//sizeof msg = 64	
 void write_syslog(char *msg) 
 {
 	if(strlen(msg) > 64) 
@@ -61,7 +61,7 @@ void write_syslog(char *msg)
 	syslog(LOG_ERR, "%s", msg);
 	closelog();
 }
-
+// sizeof extension = 20, sizeof target = 80
 char * read_mime(char *extension, char *target)
 {
 	static FILE *f = NULL;
@@ -90,7 +90,7 @@ char * read_mime(char *extension, char *target)
 		{
 			continue;
 		}
-		sscanf(line, "%s %s %s %s %s %s %s %s", &content_type, &ending[0], &ending[1], &ending[2], &ending[3], &ending[4], &ending[5], &ending[6]);
+		sscanf(line, "%80s %20s %20s %20s %20s %20s %20s %20s", &content_type, &ending[0], &ending[1], &ending[2], &ending[3], &ending[4], &ending[5], &ending[6]);
 		if(line[0] != '#')
 		{
 			int i;
@@ -109,11 +109,12 @@ char * read_mime(char *extension, char *target)
 	free(line);
 	return target;
 }
+//sizeof docroot = 80
 void read_conf(int *port, char *docroot)
 {
 	
 	FILE *f = fopen(".lab3-config", "r");
-	char values[256];
+	char values[32];
 	char *line = NULL;
 	size_t len = 0;
 	ssize_t read;
@@ -126,11 +127,11 @@ void read_conf(int *port, char *docroot)
 		sscanf(line, "%s", &values);
 		if(strcmp(values, "Docroot") == 0) 
 		{
-			sscanf(line, "%s %s", &values, docroot);
+			sscanf(line, "%32s %80s", &values, docroot);
 		}
 		else if(strcmp(values, "Listen") == 0) 
 		{
-			sscanf(line, "%s %d", &values, port); 
+			sscanf(line, "%32s %d", &values, port); 
 		}
 		else 
 		{
@@ -139,6 +140,27 @@ void read_conf(int *port, char *docroot)
         }
 	fclose(f);
 	free(line);
+}
+char *resolve_path(char *full_path, char *buf)
+{
+	if(strncmp(full_path, "http://", 7) != 0 && strncmp(full_path, "/", 1) != 0)
+	{
+		return NULL;
+	}
+
+	strcpy(buf, full_path);
+
+	if(strncmp(full_path, "/", 1) == 0) 
+	{
+		return buf;
+	}
+	strsep(&buf, "/");
+	strsep(&buf, "/");
+	strsep(&buf, "/");
+	buf--;
+	buf[0] = '/';
+
+	return buf;
 }
 void get_opt(int argc, char **argv, int *port, char *log_file, int *daemon) 
 {
@@ -159,8 +181,8 @@ void get_opt(int argc, char **argv, int *port, char *log_file, int *daemon)
 	}
 
 }
-//int main(int argc, char **argv) 
-//{
+int main(int argc, char **argv) 
+{
 /*	int port;
 	int daemon;
 	char log_file[256];
@@ -178,7 +200,12 @@ void get_opt(int argc, char **argv, int *port, char *log_file, int *daemon)
 	//int port;
 
 	//read_conf(&port, docroot);
+	
+//	char buf[56];
+//	char real_path[56] = "www.test.se/some/path/index.html";
+
+//	printf("%s \n", resolve_path(real_path, buf));
 
 	//printf("%s %d \n", docroot, port);
 //	write_log("test.log", "192.0.0.2", "-", "-", "Testing testing", 404, 0);
-//}
+}

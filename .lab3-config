@@ -1,4 +1,4 @@
-#Document root folder
+#Document root folder, max length 80
 Docroot /var/www/
 #Default listen port
 Listen 8080
