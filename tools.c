@@ -141,26 +141,24 @@ void read_conf(int *port, char *docroot)
 	fclose(f);
 	free(line);
 }
-char *resolve_path(char *full_path, char *buf)
+char *resolve_path(char *full_path)
 {
 	if(strncmp(full_path, "http://", 7) != 0 && strncmp(full_path, "/", 1) != 0)
 	{
 		return NULL;
 	}
 
-	strcpy(buf, full_path);
-
 	if(strncmp(full_path, "/", 1) == 0) 
 	{
-		return buf;
+		return full_path;
 	}
-	strsep(&buf, "/");
-	strsep(&buf, "/");
-	strsep(&buf, "/");
-	buf--;
-	buf[0] = '/';
+	strsep(&full_path, "/");
+	strsep(&full_path, "/");
+	strsep(&full_path, "/");
+	full_path--;
+	full_path[0] = '/';
 
-	return buf;
+	return full_path;
 }
 void get_opt(int argc, char **argv, int *port, char *log_file, int *daemon) 
 {
