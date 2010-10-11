@@ -157,7 +157,6 @@ char *resolve_path(char *full_path)
 	strsep(&full_path, "/");
 	full_path--;
 	full_path[0] = '/';
-
 	return full_path;
 }
 void get_opt(int argc, char **argv, int *port, char *log_file, int *daemon) 

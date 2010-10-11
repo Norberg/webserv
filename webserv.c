@@ -13,8 +13,6 @@
 #define BUFF_SIZE 4096
 #define NR_THREADS 5
 
-FILE* logfile;
-
 void create_header(char *path, char *buffer)
 {
 	char temp[32];
@@ -38,6 +36,7 @@ int response(int new_socket)
 	int fd = 0;
 	int size = 0;
 	int bytes = 0;
+	int err = 0;
 
 	recv(new_socket,buffer,BUFF_SIZE,0);
 	if (strncmp(buffer, "GET",3) == 0)
@@ -46,13 +45,22 @@ int response(int new_socket)
 		uri = strsep(&temp, " \r\n"); // GET
 		uri = strsep(&temp, " \r\n");
 		httpv = strsep(&temp, " \r\n"); // HTTP version
+		uri = resolve_path(uri);
+		if (uri == NULL)
+		{
+			strcpy(buffer,"HTTP/1.0 400 Bad Request \r\n");
+			send(new_socket,buffer, strlen(buffer),0);
+			write_log(NULL, new_socket, "-", "-", "GET", "Bad Request", 400, 0);
+			goto cleanup;
+			
+		}		
 		res = realpath(uri, NULL);
 		printf("uri: %s REALPATH: %s\n",uri, res);
 		if(res == NULL)
 		{
+			write_log(NULL, new_socket, "-", "-", "GET ", uri, 404, 0);
 			strcpy(buffer,"HTTP/1.0 404 Not Found \r\n");
 			send(new_socket,buffer, strlen(buffer),0);
-			write_log(NULL, "127.0.0.1", "-", "-", "GET ", uri, 404, 0);
 			goto cleanup;
 		}
 		fd = open(res, O_RDONLY);
@@ -77,10 +85,17 @@ int response(int new_socket)
 				break;
 			}
 			bytes += size;
-			send(new_socket,buffer,size,0);
+			err = send(new_socket,buffer,size,MSG_NOSIGNAL); /* We dont want any SIGPIPE */
+			if (err == -1)
+			{
+				/* Client closed connection */ 
+				/* 402 - Payment Required - connection probably closed due to lack of ISP payment :P */
+				write_log(NULL, new_socket, "-", "-", "GET", "Client closed connection", 402, bytes);
+				goto cleanup;
+			}	
 			size = read(fd, buffer, BUFF_SIZE);
 		}
-		write_log(NULL, "127.0.0.1", "-", "-", "GET ", res, 200, bytes);
+		write_log(NULL, new_socket, "-", "-", "GET ", res, 200, bytes);
 	}
 	else if (strncmp(buffer, "HEAD",4) == 0)
 	{
@@ -151,8 +166,9 @@ int main(int argc, char **argv)
 	
 	read_conf(&port, docroot);
 	get_opt(argc, argv, &port, logfile, &daemon); 
-	write_log(logfile,NULL,NULL, NULL, NULL, NULL, 0, 0);
+	write_log(logfile,0,NULL, NULL, NULL, NULL, 0, 0);
 	read_mime(extension, type);
+
 		
 	/* tries to chroot the process and */
 	chdir(docroot);
@@ -161,6 +177,19 @@ int main(int argc, char **argv)
 		puts("Server started without chroot permissions");
 		puts("exiting");
 		return 0;
+	}
+	
+	/* if -d specifed deamonize the server */
+	if (daemon)
+	{
+		/*Fork and kill parent*/
+		if (fork() != 0)
+			exit(0);
+		setsid();
+		umask(0);
+		close(STDIN_FILENO);
+		close(STDOUT_FILENO);
+		close(STDERR_FILENO);		
 	}
 
 
@@ -185,8 +214,8 @@ int main(int argc, char **argv)
 	{
 		pipe(pipes[i]);
 		pthread_create(&thread[i], NULL, worker_thread, pipes[i]);
-	}	
-
+	}
+	write_syslog("Server succesfully started!");	
 	addrlen=sizeof(address);
 	while (1)
 	{
