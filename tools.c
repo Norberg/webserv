@@ -181,8 +181,8 @@ void get_opt(int argc, char **argv, int *port, char *log_file, int *daemon)
 	}
 
 }
-int main(int argc, char **argv) 
-{
+//int main(int argc, char **argv) 
+//{
 /*	int port;
 	int daemon;
 	char log_file[256];
@@ -208,4 +208,4 @@ int main(int argc, char **argv)
 
 	//printf("%s %d \n", docroot, port);
 //	write_log("test.log", "192.0.0.2", "-", "-", "Testing testing", 404, 0);
-}
+//}
