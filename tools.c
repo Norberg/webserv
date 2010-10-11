@@ -8,7 +8,7 @@
 #include<sys/socket.h>
 #include<netinet/in.h>
 
-void write_log(char *file_name, char *ip, char *ident, char *auth, char *request_type, char *request_file, int status, int bytes) 
+void write_log(char *file_name, int sockfd, char *ident, char *auth, char *request_type, char *request_file, int status, int bytes) 
 {
 	static FILE *file = NULL;
 	if(file == NULL) 
@@ -16,16 +16,26 @@ void write_log(char *file_name, char *ip, char *ident, char *auth, char *request
 		file = fopen(file_name, "a+");
 	} 
 
-	if(ip == NULL) 
+	if(sockfd == 0) 
 	{
 		return;
 	}
+	
+	struct sockaddr_in client;
+	int c_len = sizeof(client);
+	char buf[80];	
+
 	time_t result;
 	result = time(NULL);
 	struct tm* brokentime = localtime(&result);
-	char now[32]; 
+	char now[32];
+
+	getpeername(sockfd, (struct sockaddr*)&client, &c_len);
+	
+	inet_ntop(AF_INET, (struct sockaddr*)&client.sin_addr, buf, sizeof(buf));
+
 	strftime(now, 32, "%d/%b/%Y:%T %z", brokentime);
-	fprintf(file, "%s %s %s [%s] \"%s %s\" %d %d \n", ip, ident, auth, now, request_type, request_file, status, bytes);
+	fprintf(file, "%s %s %s [%s] \"%s %s\" %d %d \n", buf, ident, auth, now, request_type, request_file, status, bytes);
 	fflush(file);	
 }
 char * get_extension(char *path, char *extension)
