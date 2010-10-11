@@ -1,2 +1,2 @@
-2010-10-01: Webserver "craches" when someone close a download
-2010-10-04: Support GET http://www.somehost.com/path/file.html HTTP/1.0 - Function done but not yet implemented 
+2010-10-11: catch SIGPIPE and discard, we dont want the server to go down just because a send failed
+

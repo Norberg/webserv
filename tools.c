@@ -8,9 +8,12 @@
 #include<sys/socket.h>
 #include<netinet/in.h>
 
+#define FLUSH_LOG_EVERY 10 // seconds 
+
 void write_log(char *file_name, int sockfd, char *ident, char *auth, char *request_type, char *request_file, int status, int bytes) 
 {
 	static FILE *file = NULL;
+	static time_t last_flushed = 0;
 	if(file == NULL) 
 	{
 		file = fopen(file_name, "a+");
@@ -36,7 +39,11 @@ void write_log(char *file_name, int sockfd, char *ident, char *auth, char *reque
 
 	strftime(now, 32, "%d/%b/%Y:%T %z", brokentime);
 	fprintf(file, "%s %s %s [%s] \"%s %s\" %d %d \n", buf, ident, auth, now, request_type, request_file, status, bytes);
-	fflush(file);	
+	if(last_flushed + 10 <= time(0))
+	{
+		last_flushed = time(0);
+		fflush(file);
+	}
 }
 char * get_extension(char *path, char *extension)
 {

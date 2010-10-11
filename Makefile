@@ -1,2 +1,2 @@
 default:
-	gcc webserv.c -lpthread -o webserv -ggdb -O2
+	gcc webserv.c -lpthread -o webserv -ggdb 

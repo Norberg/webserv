@@ -7,16 +7,20 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/select.h>
+#include <sys/queue.h>
 #include <netinet/in.h>
 #include "tools.c"
 
 #define BUFF_SIZE 4096
-#define NR_THREADS 5
+#define NR_THREADS  5
 
 struct connection
 {
 	int socket;
-	int fd;	
+	int fd;
+        LIST_ENTRY(connection) entries;          /* List. */
+	
 };
 
 void create_header(char *path, char *buffer)
@@ -31,19 +35,32 @@ void create_header(char *path, char *buffer)
 	strcat(buffer, "\r\n\r\n");
 }
 
-/* Returns 0 when finnished and 1 otherwine*/
+/* Returns 0 when finished and 1 otherwise*/
 int send_file(int socket, int fd)
 {
 	char buffer[BUFF_SIZE];
 	int size = read(fd, buffer, BUFF_SIZE);
-	if (size > 0)
+	if (size == BUFF_SIZE)
+	{	
+		if (send(socket,buffer,size,MSG_NOSIGNAL) == -1)
+		{	
+			close(fd);
+			close(socket);
+			return 0; /*Connection lost, dont continue trying*/
+		}
+	}
+	else if (size > 0)
 	{
-		send(socket,buffer,size,0);
+		/*Didnt read BUFF_SIZE bytes, the file have hit EOF*/
+		send(socket,buffer,size,MSG_NOSIGNAL);
+		write_log(NULL, socket, "-", "-", "GET ", "filename", 200, 512);
+		close(fd);
+		close(socket);
+		return 0; 
 	}
 	else if (size == 0)
 	{
-		puts("sent the complete file now");
-		write_log(NULL, "127.0.0.1", "-", "-", "GET ", "filename", 200, 512);
+		write_log(NULL, socket, "-", "-", "GET ", "filename", 200, 512);
 		close(fd);
 		close(socket);
 		return 0;
@@ -51,7 +68,9 @@ int send_file(int socket, int fd)
 	else if(size == -1)
 	{
 		strcpy(buffer,"HTTP/1.0 501 Internal Server Error\r\n");
-		send(socket,buffer,strlen(buffer),0);
+		send(socket,buffer,strlen(buffer),MSG_NOSIGNAL);
+		close(fd);
+		close(socket);
 	}
 	return 1;
 }
@@ -94,19 +113,26 @@ int response(int new_socket, struct connection *conn)
 			send(new_socket,buffer, strlen(buffer),0);
 			goto cleanup;
 		}
-		fd = open(res, O_RDONLY|O_NONBLOCK);
+		fd = open(res, O_RDONLY);
 		if (fd == -1)
 		{
 			strcpy(buffer,"HTTP/1.0 403 Forbidden\r\n");
 			send(new_socket,buffer,strlen(buffer),0);
-			close(new_socket);
 			goto cleanup;
 		}
 		if (httpv[0] != '\0') //Full request
 		{
 			create_header(res,buffer);
 			send(new_socket,buffer,strlen(buffer),0);
-		}	
+		}
+		conn->socket = new_socket;
+		conn->fd = fd;
+		free(res);
+		return 0;
+		/* Move over to non-blocking io*/
+		int flags = fcntl(new_socket, F_GETFL, 0);
+		fcntl(new_socket, F_SETFL, flags | O_NONBLOCK);
+		/*	
 		size = read(fd, buffer, BUFF_SIZE);
 		while (size > 0)
 		{
@@ -118,16 +144,16 @@ int response(int new_socket, struct connection *conn)
 			}
 			bytes += size;
 			err = send(new_socket,buffer,size,MSG_NOSIGNAL); /* We dont want any SIGPIPE */
-			if (err == -1)
-			{
-				/* Client closed connection */ 
-				/* 402 - Payment Required - connection probably closed due to lack of ISP payment :P */
-				write_log(NULL, new_socket, "-", "-", "GET", "Client closed connection", 402, bytes);
-				goto cleanup;
-			}	
-			size = read(fd, buffer, BUFF_SIZE);
-		}
-		write_log(NULL, new_socket, "-", "-", "GET ", res, 200, bytes);
+		//	if (err == -1)
+		//	{
+		//		/* Client closed connection */ 
+		//		/* 402 - Payment Required - connection probably closed due to lack of ISP payment :P */
+	//			write_log(NULL, new_socket, "-", "-", "GET", "Client closed connection", 402, bytes);
+	//			goto cleanup;
+	//		}	
+	//		size = read(fd, buffer, BUFF_SIZE);
+	//	}/
+	//	write_log(NULL, new_socket, "-", "-", "GET ", res, 200, bytes);
 		//send_file(new_socket, fd);
 	}
 	else if (strncmp(buffer, "HEAD",4) == 0)
@@ -150,14 +176,13 @@ int response(int new_socket, struct connection *conn)
 	{
 		strcpy(buffer,"HTTP/1.0 501 Not Implemented \r\n");
 		send(new_socket,buffer,strlen(buffer),0);
-		close(new_socket);
 	}
 	cleanup:
+	conn->fd = 0;	
+	conn->socket = 0;	
 	free(res);
-	/*close(fd);
-	close(new_socket);*/
-	conn->socket = new_socket;
-	conn->fd = fd; 
+	close(new_socket);
+	close(fd); 
 	return 0;
 }
 
@@ -166,16 +191,40 @@ void * worker_thread(void *arg)
 {
 	int *pipe  = (int *)arg;
 	int new_socket;
-	int fsd[32]; /* File and socket descriptors */
-	struct connection conn;
-	fd_set ready;
-	struct timeval timeout;
-	/*TODO: use select on fsd and figure out how to read the pipe at the same time*/	
+	struct connection *conn;
+	struct connection conn2;
+	fd_set readset, writeset;
+	FD_ZERO(&readset);	
+	FD_ZERO(&writeset);
+	LIST_HEAD(listhead, connection) head;
+	LIST_INIT(&head);
 	while(1)
 	{
-		read(pipe[0],(char *)&new_socket,sizeof(int));	
-		response(new_socket, &conn);
-		send_file(conn.socket, conn.fd);
+		/* Let select watch all open connections and pipes for "access" */
+		FD_SET(pipe[0], &readset);
+		LIST_FOREACH(conn, &head, entries) {
+			FD_SET(conn->socket, &writeset);
+		}
+		select(FD_SETSIZE, &readset, &writeset, NULL, NULL);
+		if (FD_ISSET(pipe[0], &readset))
+		{
+			read(pipe[0],(char *)&new_socket,sizeof(int));	
+			conn = malloc(sizeof(conn));
+			response(new_socket, conn);
+			if (conn->fd != 0)
+				LIST_INSERT_HEAD(&head, conn, entries);
+
+		}
+		else
+			puts("send file...");
+		LIST_FOREACH(conn, &head, entries) {
+			if (!send_file(conn->socket, conn->fd))
+			{
+				LIST_REMOVE(conn, entries);
+				free(conn);
+			}
+		}
+		
 	}
 	return ((void *)0);
 }
@@ -254,7 +303,7 @@ int main(int argc, char **argv)
 	/* Spawn worker threads */
 	for (i = 0; i < NR_THREADS; i++)
 	{
-		pipe(pipes[i]);
+		pipe2(pipes[i],0);// O_NONBLOCK);
 		pthread_create(&thread[i], NULL, worker_thread, pipes[i]);
 	}
 	write_syslog("Server succesfully started!");	
