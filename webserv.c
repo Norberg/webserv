@@ -41,9 +41,13 @@ int send_file(int socket, int fd)
 	char buffer[BUFF_SIZE];
 	int size = read(fd, buffer, BUFF_SIZE);
 	if (size == BUFF_SIZE)
-	{	
-		if (send(socket,buffer,size,MSG_NOSIGNAL) == -1)
+	{
+		size = send(socket,buffer,size,MSG_NOSIGNAL|MSG_DONTWAIT);	
+		if (size == -1)
 		{	
+			/* Client closed connection */ 
+			/* 402 - Payment Required - connection probably closed due to lack of ISP payment :P */
+			write_log(NULL, socket, "-", "-", "GET", "Client closed connection", 402, 0);
 			close(fd);
 			close(socket);
 			return 0; /*Connection lost, dont continue trying*/
@@ -129,32 +133,6 @@ int response(int new_socket, struct connection *conn)
 		conn->fd = fd;
 		free(res);
 		return 0;
-		/* Move over to non-blocking io*/
-		int flags = fcntl(new_socket, F_GETFL, 0);
-		fcntl(new_socket, F_SETFL, flags | O_NONBLOCK);
-		/*	
-		size = read(fd, buffer, BUFF_SIZE);
-		while (size > 0)
-		{
-			if(size == -1)
-			{
-				strcpy(buffer,"HTTP/1.0 501 Internal Server Error\r\n");
-				send(new_socket,buffer,strlen(buffer),0);
-				break;
-			}
-			bytes += size;
-			err = send(new_socket,buffer,size,MSG_NOSIGNAL); /* We dont want any SIGPIPE */
-		//	if (err == -1)
-		//	{
-		//		/* Client closed connection */ 
-		//		/* 402 - Payment Required - connection probably closed due to lack of ISP payment :P */
-	//			write_log(NULL, new_socket, "-", "-", "GET", "Client closed connection", 402, bytes);
-	//			goto cleanup;
-	//		}	
-	//		size = read(fd, buffer, BUFF_SIZE);
-	//	}/
-	//	write_log(NULL, new_socket, "-", "-", "GET ", res, 200, bytes);
-		//send_file(new_socket, fd);
 	}
 	else if (strncmp(buffer, "HEAD",4) == 0)
 	{
@@ -194,13 +172,13 @@ void * worker_thread(void *arg)
 	struct connection *conn;
 	struct connection conn2;
 	fd_set readset, writeset;
-	FD_ZERO(&readset);	
-	FD_ZERO(&writeset);
 	LIST_HEAD(listhead, connection) head;
 	LIST_INIT(&head);
 	while(1)
 	{
 		/* Let select watch all open connections and pipes for "access" */
+		FD_ZERO(&readset);	
+		FD_ZERO(&writeset);
 		FD_SET(pipe[0], &readset);
 		LIST_FOREACH(conn, &head, entries) {
 			FD_SET(conn->socket, &writeset);
@@ -209,19 +187,22 @@ void * worker_thread(void *arg)
 		if (FD_ISSET(pipe[0], &readset))
 		{
 			read(pipe[0],(char *)&new_socket,sizeof(int));	
-			conn = malloc(sizeof(conn));
+			conn = malloc(sizeof(struct connection));
 			response(new_socket, conn);
 			if (conn->fd != 0)
 				LIST_INSERT_HEAD(&head, conn, entries);
 
 		}
-		else
-			puts("send file...");
+	
 		LIST_FOREACH(conn, &head, entries) {
-			if (!send_file(conn->socket, conn->fd))
+			if (FD_ISSET(conn->socket, &writeset))
 			{
-				LIST_REMOVE(conn, entries);
-				free(conn);
+				if (!send_file(conn->socket, conn->fd))
+				{
+					LIST_REMOVE(conn, entries);
+					free(conn);
+					break;
+				}
 			}
 		}
 		
@@ -259,7 +240,6 @@ int main(int argc, char **argv)
 	get_opt(argc, argv, &port, logfile, &daemon); 
 	write_log(logfile,0,NULL, NULL, NULL, NULL, 0, 0);
 	read_mime(extension, type);
-
 		
 	/* tries to chroot the process and */
 	chdir(docroot);
