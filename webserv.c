@@ -13,7 +13,8 @@
 #include "tools.c"
 
 #define BUFF_SIZE 4096
-#define NR_THREADS  5
+#define NR_THREADS 5
+#define TIMEOUT 5 
 
 struct connection
 {
@@ -58,6 +59,7 @@ int send_file(int socket, int fd)
 		/*Didnt read BUFF_SIZE bytes, the file have hit EOF*/
 		send(socket,buffer,size,MSG_NOSIGNAL);
 		write_log(NULL, socket, "-", "-", "GET ", "filename", 200, 512);
+		//TODO fix filename and 512 to real values, hint: fstat
 		close(fd);
 		close(socket);
 		return 0; 
@@ -91,7 +93,17 @@ int response(int new_socket, struct connection *conn)
 	int size = 0;
 	int bytes = 0;
 	int err = 0;
-
+        struct timeval tv;
+	tv.tv_sec = TIMEOUT;
+	tv.tv_usec = 0;
+	fd_set readset;
+	FD_ZERO(&readset);	
+	FD_SET(new_socket, &readset);
+	if(!select(FD_SETSIZE, &readset, NULL, NULL, &tv))
+	{
+		printf("client timeout\n");
+		goto cleanup;
+	}
 	recv(new_socket,buffer,BUFF_SIZE,0);
 	if (strncmp(buffer, "GET",3) == 0)
 	{
@@ -109,7 +121,6 @@ int response(int new_socket, struct connection *conn)
 			
 		}		
 		res = realpath(uri, NULL);
-		printf("uri: %s REALPATH: %s\n",uri, res);
 		if(res == NULL)
 		{
 			write_log(NULL, new_socket, "-", "-", "GET ", uri, 404, 0);
@@ -193,7 +204,6 @@ void * worker_thread(void *arg)
 				LIST_INSERT_HEAD(&head, conn, entries);
 
 		}
-	
 		LIST_FOREACH(conn, &head, entries) {
 			if (FD_ISSET(conn->socket, &writeset))
 			{
