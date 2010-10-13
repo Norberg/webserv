@@ -7,6 +7,13 @@
 #include<unistd.h>
 #include<sys/socket.h>
 #include<netinet/in.h>
+#include<sys/mman.h>
+
+struct mime_types
+{
+	char content_type[80];
+	char ending[7][10];
+};
 
 #define FLUSH_LOG_EVERY 10 // seconds 
 
@@ -72,48 +79,68 @@ void write_syslog(char *msg)
 char * read_mime(char *extension, char *target)
 {
 	static FILE *f = NULL;
+	char *line = NULL;
+	size_t len = 0;
+	ssize_t read;
+	static int line_count = 0;
+	static struct mime_types *mime; 
+
 	if(f == NULL) 
 	{
 		f = fopen("mime.types", "r");
+
+		while ((read = getline(&line, &len, f)) != -1) 
+		{
+			if(line[0] == '#') 
+			{
+				continue;
+			}
+			line_count++;
+		}
+
+		mime = malloc(sizeof(struct mime_types) * line_count);
+		
+		line_count = 0;
+		rewind(f);
+
+		while ((read = getline(&line, &len, f)) != -1) 
+		{
+			if(line[0] == '#') 
+			{
+				continue;
+			}
+			sscanf(line, "%80s %20s %20s %20s %20s %20s %20s %20s", mime[line_count].content_type, 
+			mime[line_count].ending[0], mime[line_count].ending[1], mime[line_count].ending[2], 
+			mime[line_count].ending[3], mime[line_count].ending[4], mime[line_count].ending[5], 
+			mime[line_count].ending[6]);
+			line_count++;
+		}
+		free(line);
+		fclose(f);
+		f = (FILE *) 42;
+		
 	}
 	else if (extension == NULL)
 	{
 		target = "application/octet-stream";
-		return	target; 
+		return target; 
 	}
 
-	char content_type[256];
-	char ending[7][32];
-	char *line = NULL;
-	size_t len = 0;
-	ssize_t read;
-
-	//Make sure the file-pointer is at the beginning
-	rewind(f);
-
-	while ((read = getline(&line, &len, f)) != -1) 
+	int i;
+	int k;
+	for(k = 0; k < line_count; k++) 
 	{
-		if(line[0] == '#') 
+		for(i = 0; i < 8; i++) 
 		{
-			continue;
-		}
-		sscanf(line, "%80s %20s %20s %20s %20s %20s %20s %20s", &content_type, &ending[0], &ending[1], &ending[2], &ending[3], &ending[4], &ending[5], &ending[6]);
-		if(line[0] != '#')
-		{
-			int i;
-			for(i = 0; i < 8; i++) 
+			if (strcmp(mime[k].ending[i], extension) == 0) 
 			{
-				if (strcmp(ending[i], extension) == 0) 
-				{
-					target = content_type;
-					free(line);
-					return target;
-				} 
-			}
-		}	
-        }
+				target = mime[k].content_type;
+				return target;
+			} 
+		}
+	}
+		
 	target = "application/octet-stream";
-	free(line);
 	return target;
 }
 //sizeof docroot = 80
@@ -193,7 +220,7 @@ void get_opt(int argc, char **argv, int *port, char *log_file, int *daemon)
 	get_opt(argc, argv, &port, log_file, &daemon);
 	printf("%d \t %s \t %d \n", port, log_file, daemon); */
 	//write_syslog("It's a syslog yo");
-/*	char extension[32] = "php";
+/*	char extension[32] = "html";
 	char target[256];
 	char *vad;
 	vad = extension;
