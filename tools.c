@@ -73,7 +73,6 @@ void write_syslog(char *msg)
 	time_t t = time(0);
 	openlog("webserv: ", LOG_PID | LOG_CONS, LOG_USER);
 	syslog(LOG_ERR, "%s", msg);
-	closelog();
 }
 // sizeof extension = 20, sizeof target = 80
 char * read_mime(char *extension, char *target)
