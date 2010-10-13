@@ -19,7 +19,7 @@ struct connection
 {
 	int socket;
 	int fd;
-        LIST_ENTRY(connection) entries;          /* List. */
+        LIST_ENTRY(connection) entries;          /* Needed for LIST */
 	
 };
 
@@ -95,7 +95,7 @@ int response(int new_socket, struct connection *conn)
 	recv(new_socket,buffer,BUFF_SIZE,0);
 	if (strncmp(buffer, "GET",3) == 0)
 	{
-		temp = buffer; // TODO do we really need this
+		temp = buffer; // TODO do we really need this, yes C is this weird?
 		uri = strsep(&temp, " \r\n"); // GET
 		uri = strsep(&temp, " \r\n");
 		httpv = strsep(&temp, " \r\n"); // HTTP version
@@ -136,7 +136,7 @@ int response(int new_socket, struct connection *conn)
 	}
 	else if (strncmp(buffer, "HEAD",4) == 0)
 	{
-		temp = buffer; // TODO do we really need this
+		temp = buffer; // TODO do we really need this, yes C is this weird?
 		uri = strsep(&temp, " \r\n"); // GET
 		uri = strsep(&temp, " \r\n");
 		res = realpath(uri, NULL);
