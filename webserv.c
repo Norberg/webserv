@@ -168,6 +168,7 @@ int main(int argc, char **argv)
 	get_opt(argc, argv, &port, logfile, &daemon); 
 	write_log(logfile,0,NULL, NULL, NULL, NULL, 0, 0);
 	read_mime(extension, type);
+	write_syslog("Server starting up..");	
 
 		
 	/* tries to chroot the process and */
