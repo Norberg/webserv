@@ -284,7 +284,12 @@ int main(int argc, char **argv)
 		if (fork() != 0)
 			exit(0);
 		setsid();
-		close(STDIN_FILENO);
+		/*
+			STDIN should be closed here while in daemon, but for some reason the 
+			server stops working when we close it. We see no reason for this since
+			we don't give the server any input, but still it won't accept more than one request.
+		*/
+		//close(STDIN_FILENO);
 		close(STDOUT_FILENO);
 		close(STDERR_FILENO);		
 	}

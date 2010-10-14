@@ -45,7 +45,7 @@ void write_log(char *file_name, int sockfd, char *ident, char *auth, char *reque
 	inet_ntop(AF_INET, (struct sockaddr*)&client.sin_addr, buf, sizeof(buf));
 
 	strftime(now, 32, "%d/%b/%Y:%T %z", brokentime);
-	fprintf(file, "%s %s %s [%s] \"%s %s\" %d %d \n", buf, ident, auth, now, request_type, request_file, status, bytes);
+	fprintf(file, "%s %s %s [%s] \"%s %.60s\" %d %d \n", buf, ident, auth, now, request_type, request_file, status, bytes);
 	if(last_flushed + 10 <= time(0))
 	{
 		last_flushed = time(0);
