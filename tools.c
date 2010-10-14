@@ -55,7 +55,7 @@ void write_log(char *file_name, int sockfd, char *ident, char *auth, char *reque
 char * get_extension(char *path, char *extension)
 {
 	int len = strlen(path);
-	for (len = strlen(path);len > 0; len--)
+	for (len = strlen(path);len >= 0; len--)
 	{
 		if(path[len] == '.')
 			return path+len+1;

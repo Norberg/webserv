@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/select.h>
 #include <sys/queue.h>
 #include <netinet/in.h>
@@ -15,11 +16,13 @@
 #define BUFF_SIZE 4096
 #define NR_THREADS 5
 #define TIMEOUT 5 
+#define STANDARD_FILE "/index.html"
 
 struct connection
 {
 	int socket;
 	int fd;
+	char *file_name;
         LIST_ENTRY(connection) entries;          /* Needed for LIST */
 	
 };
@@ -37,9 +40,12 @@ void create_header(char *path, char *buffer)
 }
 
 /* Returns 0 when finished and 1 otherwise*/
-int send_file(int socket, int fd)
+int send_file(struct connection *conn)
 {
+	int socket = conn->socket;
+	int fd = conn->fd;
 	char buffer[BUFF_SIZE];
+	struct stat sb;
 	int size = read(fd, buffer, BUFF_SIZE);
 	if (size == BUFF_SIZE)
 	{
@@ -58,8 +64,10 @@ int send_file(int socket, int fd)
 	{
 		/*Didnt read BUFF_SIZE bytes, the file have hit EOF*/
 		send(socket,buffer,size,MSG_NOSIGNAL);
-		write_log(NULL, socket, "-", "-", "GET ", "filename", 200, 512);
-		//TODO fix filename and 512 to real values, hint: fstat
+		fstat(fd, &sb);
+		write_log(NULL, socket, "-", "-", "GET ", conn->file_name, 200, (long long) sb.st_size);
+		
+		//TODO fix filename and 512 to real values, hint: fstat 
 		close(fd);
 		close(socket);
 		return 0; 
@@ -93,6 +101,7 @@ int response(int new_socket, struct connection *conn)
 	int size = 0;
 	int bytes = 0;
 	int err = 0;
+	conn->file_name = NULL;
         struct timeval tv;
 	tv.tv_sec = TIMEOUT;
 	tv.tv_usec = 0;
@@ -101,7 +110,6 @@ int response(int new_socket, struct connection *conn)
 	FD_SET(new_socket, &readset);
 	if(!select(FD_SETSIZE, &readset, NULL, NULL, &tv))
 	{
-		printf("client timeout\n");
 		goto cleanup;
 	}
 	recv(new_socket,buffer,BUFF_SIZE,0);
@@ -112,33 +120,39 @@ int response(int new_socket, struct connection *conn)
 		uri = strsep(&temp, " \r\n");
 		httpv = strsep(&temp, " \r\n"); // HTTP version
 		uri = resolve_path(uri);
+		conn->file_name = malloc(sizeof(char) * strlen(uri) + 1);
+		strcpy(conn->file_name, uri);
 		if (uri == NULL)
 		{
 			strcpy(buffer,"HTTP/1.0 400 Bad Request \r\n");
-			send(new_socket,buffer, strlen(buffer),0);
+			send(new_socket,buffer, strlen(buffer),MSG_NOSIGNAL);
 			write_log(NULL, new_socket, "-", "-", "GET", "Bad Request", 400, 0);
 			goto cleanup;
 			
-		}		
+		}	
+		else if(strncmp(uri, "/\0", 2) == 0)
+		{
+			strcpy(uri, STANDARD_FILE); 
+		}	
 		res = realpath(uri, NULL);
 		if(res == NULL)
 		{
 			write_log(NULL, new_socket, "-", "-", "GET ", uri, 404, 0);
 			strcpy(buffer,"HTTP/1.0 404 Not Found \r\n");
-			send(new_socket,buffer, strlen(buffer),0);
+			send(new_socket,buffer, strlen(buffer),MSG_NOSIGNAL);
 			goto cleanup;
 		}
 		fd = open(res, O_RDONLY);
 		if (fd == -1)
 		{
 			strcpy(buffer,"HTTP/1.0 403 Forbidden\r\n");
-			send(new_socket,buffer,strlen(buffer),0);
+			send(new_socket,buffer,strlen(buffer),MSG_NOSIGNAL);
 			goto cleanup;
 		}
 		if (httpv[0] != '\0') //Full request
 		{
 			create_header(res,buffer);
-			send(new_socket,buffer,strlen(buffer),0);
+			send(new_socket,buffer,strlen(buffer),MSG_NOSIGNAL);
 		}
 		conn->socket = new_socket;
 		conn->fd = fd;
@@ -151,20 +165,19 @@ int response(int new_socket, struct connection *conn)
 		uri = strsep(&temp, " \r\n"); // GET
 		uri = strsep(&temp, " \r\n");
 		res = realpath(uri, NULL);
-		printf("uri: %s REALPATH: %s\n",uri, res);
 		if(res == NULL)
 		{
 			strcpy(buffer,"HTTP/1.0 404 Not Found \r\n");
-			send(new_socket,buffer, strlen(buffer),0);
+			send(new_socket,buffer, strlen(buffer),MSG_NOSIGNAL);
 			goto cleanup;
 		}
 		create_header(res,buffer);
-		send(new_socket,buffer,strlen(buffer),0);
+		send(new_socket,buffer,strlen(buffer),MSG_NOSIGNAL);
 	}
 	else
 	{
 		strcpy(buffer,"HTTP/1.0 501 Not Implemented \r\n");
-		send(new_socket,buffer,strlen(buffer),0);
+		send(new_socket,buffer,strlen(buffer),MSG_NOSIGNAL);
 	}
 	cleanup:
 	conn->fd = 0;	
@@ -207,9 +220,11 @@ void * worker_thread(void *arg)
 		LIST_FOREACH(conn, &head, entries) {
 			if (FD_ISSET(conn->socket, &writeset))
 			{
-				if (!send_file(conn->socket, conn->fd))
+				if (!send_file(conn))
 				{
 					LIST_REMOVE(conn, entries);
+					free(conn->file_name);
+					conn->file_name = NULL;
 					free(conn);
 					break;
 				}
@@ -264,16 +279,15 @@ int main(int argc, char **argv)
 	/* if -d specifed deamonize the server */
 	if (daemon)
 	{
+		umask(0);
 		/*Fork and kill parent*/
 		if (fork() != 0)
 			exit(0);
 		setsid();
-		umask(0);
 		close(STDIN_FILENO);
 		close(STDOUT_FILENO);
 		close(STDERR_FILENO);		
 	}
-
 
 	/* create and set master socket to allow multiple connections */
 	master_socket=socket(AF_INET,SOCK_STREAM,0);
